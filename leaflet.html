@@ -1,0 +1,237 @@
+<html>
+
+	<head>
+		<meta charset='utf-8'>
+		<title>Maps</title>
+		<link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.7/leaflet.css" />
+		<link rel="stylesheet" href="MarkerCluster.css" />
+		<link rel="stylesheet" href="MarkerCluster.Default.css" />
+		<link rel="stylesheet" href="http://code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css">
+		
+		<script src="http://cdn.leafletjs.com/leaflet-0.7/leaflet.js"></script>
+		<script src="leaflet.markercluster-src.js"></script>
+		<script src="http://code.jquery.com/jquery-1.10.2.js"></script>
+		<script src="http://code.jquery.com/ui/1.11.4/jquery-ui.js"></script>
+		
+		
+		<style>
+			html, body, #mapid{
+				height: 100%;
+				width:100%;
+				margin:0;
+			}
+			#myButton{
+				position:absolute;
+				top: 9px;
+				left:60px;
+				width:50px;
+				height:50px;
+				border-radius:10px;
+				background-color: rgba(255, 153, 0, 0.7);
+				z-index:2000;
+			}
+			#myBlock{
+				width: 240px; 
+				height: 300px;
+    			background-color: rgba(180, 238, 180, 1);
+    			border: solid 1px black; 
+    			border-radius: 20px ;
+				box-shadow: 0 0 5px #888;
+				left: 61px;
+				padding: 0.5em;
+				position: absolute;
+				top: 65px;
+				z-index: 1000;
+			}
+			#loading {
+				position: absolute;
+				display: none;
+				text-align:center;
+				background: #555 url('https://map.land.gov.ua/') center center no-repeat;
+				opacity: 0.99;
+				height:100%;
+				width:100%;
+				margin-left:-8;
+				margin-top:-8;
+				padding:0;
+				border-radius:20px;
+				z-index: 2001;
+			}
+		</style>
+
+	<script>
+
+		document.addEventListener('DOMContentLoaded', function(){
+
+				let markers = L.markerClusterGroup();
+			    let startTime = "2021-11-04";
+				let endTime = "2021-11-11";
+				let url;
+				let layer = L.geoJson();
+				let myJson;
+				
+				$( "#myButton" ).click (function(){
+					$("#myBlock").slideToggle(300);
+				});
+				
+				
+				$(function() {
+					$( "#datepickerS" ).datepicker({	
+						onSelect: function(dateText, inst) { 
+							sTime = dateText.split('/');
+							startTime = sTime[2]+'-'+sTime[0]+'-'+sTime[1];
+						}
+					});
+				});
+				$(function() {
+					$( "#datepickerE" ).datepicker({
+						onSelect: function(dateText, inst) {
+							markers.clearLayers();
+							layer.clearLayers();
+							document.getElementById('loading').style.display="block";
+							eTime = dateText.split('/');
+							endTime = eTime[2]+'-'+eTime[0]+'-'+eTime[1];
+							url = "https://soft.farm/api="+startTime+"&endtime="+endTime+'';
+							
+							$.ajax({
+								url,
+								type: 'GET',
+								success: onGetSuccess,
+								error: onGetError
+							});
+
+						}
+					});
+				});
+
+				$(function() {
+					let select = $( "#minbeds" );
+					let slider = $( "<div id='slider'></div>" ).insertAfter( select ).slider({
+						value: select[ 0 ].selectedIndex,
+						slide: function( event, ui ) {
+							select[ 0 ].selectedIndex = ui.value;
+							if (startTime && endTime){
+							markers.clearLayers();
+							layer.clearLayers();
+							layer = L.geoJson(myJson, {
+								filter: function(feature){
+									if(feature.properties.mag>=ui.value){
+										return feature;
+									};
+								},
+								onEachFeature: function(feature, lyr){
+									lyr.bindPopup("<b>Info: </b><i>"+feature.properties.title+"</i><br><b>Cadastral_number: </b><i>"+feature.properties.mag+"</i>");
+								}
+							});
+							
+							markers.addLayer(layer);
+							markers.addTo(myMap);
+							}
+						}
+					});
+					$( "#minbeds" ).change(function() {
+					let sValue = this.selectedIndex;
+						slider.slider( "value", this.selectedIndex);
+						if (startTime && endTime){
+							markers.clearLayers();
+							layer.clearLayers();
+							layer = L.geoJson(myJson, {
+								filter: function(feature){
+									if(feature.properties.mag>=sValue){
+										return feature;
+									};
+								},
+								onEachFeature: function(feature, lyr){
+									lyr.bindPopup("<b>Info: </b><i>"+feature.properties.title+"</i><br><b>Cadastral_number: </b><i>"+feature.properties.mag+"</i>");
+								}
+							});
+							markers.addLayer(layer);
+							markers.addTo(myMap);
+						}
+					});
+				});
+
+				let myMap = L.map('mapid', {
+					center:[46.505, -120.09],
+					zoom: 4
+				});
+				
+				L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+					attribution: 'Map data © <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
+				}).addTo(myMap);
+				
+			let firstUrl = "https://soft.farm/api/query?format=geojson&starttime="+startTime+"&endtime="+endTime+"";
+				$.get(
+								firstUrl,
+								{},
+								onGetSuccess
+							);
+				function onGetSuccess(data){
+					myJson = data;
+					layer = L.geoJson(myJson, {
+								onEachFeature: function(feature, lyr){
+									lyr.bindPopup("<b>Info: </b><i>"+feature.properties.title+"</i><br><b>Cadastral_number: </b><i>"+feature.properties.mag+"</i>");
+								}
+							});
+					
+					markers.addLayer(layer);
+					markers.addTo(myMap);
+					document.getElementById('loading').style.display="none";
+				};
+				
+				function onGetError(data){
+					console.log(data);
+					alert("Ваш запрос не может быть выполнен. Статус ошибки: "+data.status);
+					document.getElementById('loading').style.display='none';
+				}
+			}
+		)
+	
+	</script>
+	</head>
+	
+	<body>
+		<div id="mapid"></div>
+		<button id='myButton'><img src='images/sixNP.png' style="margin-left:-5; padding:0; width:45px;height:45px"></img></button>
+		<div id='myBlock' style='display:none;'>
+		<b id="loading"><br><br><br> Идёт запрос к серверу...</b>
+			<p style='position:absolute; z-index:1000; top:1px; text-align:center;'>Выбрать  дату:</p>
+			<p style='position:absolute; z-index:1000; top:40px; margin-left:10px;'>Начальная дата: <input type="text" value="11/04/2021" id="datepickerS"></p>
+			<p style='position:absolute; z-index:1000; top:80px; margin-left:10px;'>Конечная дата: <input type="text" value="11/11/2021" id="datepickerE"></p>
+			<hr style='position:absolute; z-index:1000; top:135px; width:90%; color:black;'>
+			<p style='position:absolute; z-index:1000; top:150px; text-align:center;'> Выбрать кадастровый участок:</p>
+			<div id="slider1" >
+				<form id="reservation" style='position:absolute;z-index:1000; width:90%;top:200px; margin-left:4px; padding-top:5px' >
+					<label for="minbeds" ></label>
+					<select name="minbeds" id="minbeds">
+						<option>1420988400:01:063:0003</option>
+						<option>1420988400:01:001:0005</option>
+						<option>1420988400:01:005:0040</option>
+						<option>1420988400:01:063:0005</option>
+						<option>1420988400:01:001:0017</option>
+						<option>1420988400:01:001:0021</option>
+						<option>1420988400:01:001:0018</option>
+						<option>1420988400:01:001:0015</option>
+						<option>1420988400:01:001:0012</option>
+						<option>1420988400:01:063:0010</option>
+						<option>1420988400:01:001:0025</option>
+						<option>1420988400:01:063:0006</option>
+						<option>1420988400:01:001:0010</option>
+						<option>1420988400:01:063:0017</option>
+						<option>1420988400:01:063:0015</option>
+						<option>1420988400:01:001:0011</option>
+						<option>1420988400:01:063:0009</option>
+						<option>1420988400:01:063:0013</option>
+						<option>1420988400:01:001:0020</option>
+						<option>1420988400:01:001:0016</option>
+						<option>1420988400:01:001:0014</option>
+						<option>1420988400:01:063:0012</option>
+						<option>1420988400:01:063:0004</option>
+						<option>1420988400:01:063:0016</option>
+					</select>
+				</form>
+			</div>
+		</div>
+		
+	</body>
+</html>
